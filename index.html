@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FullCalendar Time Selection Example</title>
+  <link href='https://cdn.jsdelivr.net/npm/fullcalendar@5.10.1/main.min.css' rel='stylesheet' />
+  <script src='https://cdn.jsdelivr.net/npm/fullcalendar@5.10.1/main.min.js'></script>
+  <script src='https://cdn.jsdelivr.net/npm/fullcalendar@5.10.1/locales-all.min.js'></script>
+  <style>
+    body {
+      background-color: #f0f0f0;
+      color: #333;
+      font-family: Arial, sans-serif;
+    }
+
+    .fc {
+      background-color: #fff;
+      border-color: #ccc;
+      color: #333;
+    }
+
+    .fc .fc-toolbar {
+      background-color: #f7f7f7;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .fc .fc-button {
+      background-color: #e7e7e7;
+      border: none;
+      color: #333;
+    }
+
+    .fc .fc-button:hover {
+      background-color: #ddd;
+    }
+
+    .fc .fc-button:focus {
+      box-shadow: none;
+    }
+
+    .fc .fc-daygrid-day {
+      border: 1px solid #ddd;
+    }
+
+    .fc .fc-timegrid-slot {
+      background-color: #f9f9f9;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .fc .fc-timegrid-slot:hover {
+      background-color: #eee;
+    }
+
+    .fc .fc-event {
+      background-color: #78C0E0;
+      border-color: #ccc;
+      color: #333;
+    }
+
+    #userNameContainer {
+      margin-top: 20px;
+    }
+
+    #freeTimeList {
+      margin-top: 20px;
+      padding: 10px;
+      background-color: #fff;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+
+    #freeTimeList ul {
+      list-style-type: none;
+      padding: 0;
+    }
+
+    #freeTimeList li {
+      margin: 5px 0;
+    }
+
+    .time-list {
+      list-style-type: disc;
+      margin-left: 20px;
+    }
+
+    .time-list li {
+      list-style-position: inside;
+      margin-left: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Seleccione sus horas libres</h1>
+  <div id='calendar'></div>
+  <div id="userNameContainer">
+    <input type="text" id="userName" name="userName" placeholder="Ingrese su nombre">
+  </div>
+  <div id="freeTimeList">
+    <h2>Tiempo libre:</h2>
+    <ul id="daysList"></ul>
+  </div>
+  <button onclick="saveSelectedTimes()">Guardar</button>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      var calendarEl = document.getElementById('calendar');
+      var selectedRanges = [];
+
+      var calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'timeGridWeek',
+        locale: 'es',
+        slotLabelFormat: {
+          hour: 'numeric',
+          minute: '2-digit',
+          omitZeroMinute: false,
+          hour12: false
+        },
+        validRange: {
+          start: new Date().toISOString().split('T')[0] // Fecha de hoy
+        },
+        selectable: true,
+        selectOverlap: false,
+        select: function(info) {
+          var selectedTime = {
+            id: 'event_' + new Date().getTime(),
+            start: info.startStr,
+            end: info.endStr,
+            display: 'background',
+            color: '#78C0E0'
+          };
+          selectedRanges.push(selectedTime);
+          calendar.addEvent(selectedTime);
+          calendar.unselect();
+          updateFreeTimeList();
+        },
+        eventClick: function(info) {
+          var eventId = info.event.id;
+          selectedRanges = selectedRanges.filter(function(range) {
+            return range.id !== eventId;
+          });
+          info.event.remove();
+          updateFreeTimeList();
+        },
+        events: selectedRanges,
+      });
+
+      calendar.render();
+
+      function mergeRanges(ranges) {
+        if (ranges.length === 0) return [];
+
+        // Ordenar rangos por hora de inicio
+        ranges.sort((a, b) => a.start - b.start);
+
+        const merged = [ranges[0]];
+        for (let i = 1; i < ranges.length; i++) {
+          const last = merged[merged.length - 1];
+          const current = ranges[i];
+          if (last.end >= current.start) {
+            // Fusionar rangos superpuestos
+            last.end = new Date(Math.max(new Date(last.end), new Date(current.end)));
+          } else {
+            merged.push(current);
+          }
+        }
+        return merged;
+      }
+
+      function formatDate(date) {
+        var options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        return date.toLocaleDateString('es-ES', options);
+      }
+
+      function updateFreeTimeList() {
+        var daysList = document.getElementById('daysList');
+        daysList.innerHTML = '';
+
+        var groupedRanges = selectedRanges.reduce(function(acc, range) {
+          var date = new Date(range.start);
+          var fullDate = date.toISOString().split('T')[0]; // Formato año-mes-día
+          if (!acc[fullDate]) {
+            acc[fullDate] = { date: date, ranges: [] };
+          }
+          acc[fullDate].ranges.push({
+            start: new Date(range.start),
+            end: new Date(range.end)
+          });
+          return acc;
+        }, {});
+
+        var sortedDates = Object.keys(groupedRanges).sort((a, b) => groupedRanges[a].date - groupedRanges[b].date);
+
+        sortedDates.forEach(function(fullDate) {
+          var dateData = groupedRanges[fullDate];
+          dateData.ranges = mergeRanges(dateData.ranges);
+
+          var dayItem = document.createElement('li');
+          dayItem.innerHTML = '<strong>' + formatDate(dateData.date) + ':</strong>';
+          var timesList = document.createElement('ul');
+          timesList.classList.add('time-list');
+          dateData.ranges.forEach(function(range) {
+            var timeItem = document.createElement('li');
+            timeItem.textContent = range.start.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) + ' a ' + range.end.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+            timesList.appendChild(timeItem);
+          });
+          dayItem.appendChild(timesList);
+          daysList.appendChild(dayItem);
+        });
+      }
+
+      function formatDateTime(date) {
+        var year = date.getFullYear();
+        var month = ('0' + (date.getMonth() + 1)).slice(-2);
+        var day = ('0' + date.getDate()).slice(-2);
+        var hour = ('0' + date.getHours()).slice(-2);
+        var minute = ('0' + date.getMinutes()).slice(-2);
+        return year + '-' + month + '-' + day + ' ' + hour + ':' + minute;
+      }
+
+      window.saveSelectedTimes = function() {
+        var userName = document.getElementById('userName').value;
+        if (!userName) {
+          alert("Por favor, ingrese su nombre.");
+          return;
+        }
+
+        if (confirm("¿Está seguro de que desea guardar las horas seleccionadas?")) {
+          var groupedRanges = selectedRanges.reduce(function(acc, range) {
+            var date = new Date(range.start);
+            var fullDate = date.toISOString().split('T')[0]; // Formato año-mes-día
+            if (!acc[fullDate]) {
+              acc[fullDate] = [];
+            }
+            acc[fullDate].push({
+              start: formatDateTime(new Date(range.start)),
+              end: formatDateTime(new Date(range.end))
+            });
+            return acc;
+          }, {});
+
+          var jsonResult = JSON.stringify({ name: userName, freeTimes: groupedRanges }, null, 2);
+          console.log(jsonResult);
+          alert("Horas seleccionadas guardadas. Revisa la consola para ver el JSON generado.");
+        }
+      };
+    });
+  </script>
+</body>
+</html>
